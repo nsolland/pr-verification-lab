@@ -1,0 +1,32 @@
+name: Extra security
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 5 * * 3'
+permissions:
+  contents: read
+jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Detect secrets (entire checked-out tree)
+        run: |
+          python -m pip install --disable-pip-version-check detect-secrets
+          detect-secrets scan --all-files --exclude-files '^\.git/' > /tmp/secrets.json
+          python -c 'import json; d=json.load(open("/tmp/secrets.json")); print(d["results"]); assert not d["results"], "Potential secrets detected"'
+  workflow-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: |
+          python -m pip install --disable-pip-version-check zizmor
+          zizmor .github/workflows --format plain
