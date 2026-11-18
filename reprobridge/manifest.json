@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "name": "Quality-Factory-public-PR-fixtures-v1",
+  "python_version": "3.12",
+  "files": {
+    "tests/test_public_pr.py": "db42868f2e2c754289c10c0dca30c5e4031702d3aa286c9c5fed824434ea6476",
+    "tests/test_smoke.py": "15418a61e71be80d07c410e39493b246f2a7e056e3da421b5511744cd960ebbf"
+  },
+  "steps": [
+    {
+      "argv": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_*.py",
+        "-v"
+      ],
+      "timeout_seconds": 60
+    }
+  ]
+}
