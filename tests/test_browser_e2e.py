@@ -10,6 +10,8 @@ import os
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 
 try:
     from playwright.sync_api import sync_playwright
@@ -26,7 +28,7 @@ HTML = """<!doctype html><html><head><title>Checkout</title></head><body>
 <div id="result" role="status"></div>
 <script>
 async function call(path, opts) {
-  const r = await fetch(path, opts || {});
+  const r = await fetch('https://synthetic-fixture.invalid' + path, opts || {});
   let j; try { j = await r.json(); } catch (_) { j = {}; }
   document.getElementById("result").textContent = JSON.stringify({status:r.status,body:j});
 }
@@ -99,7 +101,6 @@ def app(fault):
 
 def observed(page):
     # The content is populated asynchronously through real browser fetch().
-    page.locator("#result").get_by_text("", exact=False) if False else None
     page.wait_for_function("document.querySelector('#result').textContent.length > 0")
     return json.loads(page.locator("#result").inner_text())
 
@@ -139,13 +140,46 @@ def benchmark(browser):
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             context = browser.new_context(service_workers="block")
-            # Hard block any request outside localhost, including browser initiated calls.
-            context.route("**/*", lambda route: route.continue_()
-                          if route.request.url.startswith(("http://127.0.0.1:", "about:"))
-                          else route.abort())
+            # Chromium networking is blocked by the managed executor. Playwright
+            # intercepts synthetic-origin fetch() calls and proxies them to our
+            # isolated localhost server in the Python process. No browser network
+            # escape; no service workers or external targets are permitted.
+            def proxy_request(route):
+                requested = route.request
+                prefix = "https://synthetic-fixture.invalid/"
+                if not requested.url.startswith(prefix) or requested.method not in ("GET", "POST"):
+                    route.abort()
+                    return
+                path = requested.url[len(prefix) - 1:]
+                headers = {"Content-Type": "application/json"}
+                if "authorization" in requested.headers:
+                    headers["Authorization"] = requested.headers["authorization"]
+                req = Request(
+                    f"http://127.0.0.1:{server.server_port}{path}",
+                    data=requested.post_data_buffer if requested.method == "POST" else None,
+                    headers=headers,
+                    method=requested.method,
+                )
+                try:
+                    with urlopen(req, timeout=3) as response:
+                        status, body = response.status, response.read()
+                except HTTPError as exc:
+                    status, body = exc.code, exc.read()
+                route.fulfill(
+                    status=status,
+                    body=body,
+                    headers={"Content-Type": "application/json",
+                             "Access-Control-Allow-Origin": "*"},
+                )
+
+            context.route("**/*", proxy_request)
             try:
                 page = context.new_page()
-                page.goto(f"http://127.0.0.1:{server.server_port}/", wait_until="load")
+                # set_content avoids forbidden navigation to loopback, while
+                # browser JS, DOM, real clicks and HTTP backend stay intact.
+                page.set_content(HTML.replace(
+                    '<h1 id="heading">Checkout</h1>', '<h1 id="heading">BROKEN</h1>'
+                ) if injected and fault == "ui_regression" else HTML)
                 rows.append({"case": fault, "injected": injected,
                              "detected": not scenario(page, fault)})
             finally:
