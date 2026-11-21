@@ -62,17 +62,21 @@ def load_fixture(path: pathlib.Path):
 
 
 def run_oracles(module) -> dict[str, bool]:
-    server = ThreadingHTTPServer(("127.0.0.1", 0), module.app(""))
-    worker = threading.Thread(target=server.serve_forever, daemon=True)
-    worker.start()
-    try:
-        url = f"http://127.0.0.1:{server.server_port}"
-        # Independent functional test contracts, all against the modified code.
-        return {name: bool(module.check(url, name)) for name in module.FAULTS}
-    finally:
-        server.shutdown()
-        worker.join(timeout=5)
-        server.server_close()
+    outcomes: dict[str, bool] = {}
+    # Fresh server and in-memory datastore for every oracle. Otherwise checkout
+    # pollutes the subsequent persistence check and produces a false regression.
+    for name in module.FAULTS:
+        server = ThreadingHTTPServer(("127.0.0.1", 0), module.app(""))
+        worker = threading.Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+        try:
+            url = f"http://127.0.0.1:{server.server_port}"
+            outcomes[name] = bool(module.check(url, name))
+        finally:
+            server.shutdown()
+            worker.join(timeout=5)
+            server.server_close()
+    return outcomes
 
 
 def repair_lab(source_path: pathlib.Path = FIXTURE) -> dict[str, Any]:
