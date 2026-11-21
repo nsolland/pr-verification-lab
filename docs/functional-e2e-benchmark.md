@@ -32,3 +32,17 @@ The TestSprite `--dry-run` path returns canned results, which must never count t
 
 ## Evidence
 Record canonical source SHA, fixture SHA, test logs, candidate vendor run IDs, egress logs, timings, credits/cost, oracle adjudication, and REHT receipt. Until verified with an external executor, status is `IMPLEMENTED_UNEXECUTED`.
+
+## Chromium sandbox compatibility (2026-11-21)
+
+Managed Chromium can return `net::ERR_BLOCKED_BY_ADMINISTRATOR` even for `127.0.0.1` navigation. The browser suite now uses `page.set_content` for the synthetic app and a Playwright request route that forwards only the synthetic-origin API requests to a Python `ThreadingHTTPServer` bound on `127.0.0.1`. This retains actual Chromium clicks, DOM checks, JavaScript `fetch`, and real HTTP responses without any Chromium direct outbound connections. Requests outside the synthetic origin are aborted. It is NOT a substitute for process-level egress policy enforcement.
+
+A separately reconstructed minimal six-case smoke test for the new bridge ran in a restricted Chromium sandbox: **6/6 injected defects found and 0/6 clean controls flagged**, including blocked direct navigation. The exact PR-head browser test file still needs an independent runner attestation. Do not equate route-level network protection with the No It Phone Home OS/container gateway.
+
+Run where Playwright and a compatible local Chromium are already installed:
+
+```sh
+PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/chromium python3 -m unittest discover -s tests -p 'test_browser_e2e.py' -v
+```
+
+Do not install browsers or dependencies through uncontrolled egress.
