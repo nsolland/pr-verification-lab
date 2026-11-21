@@ -46,3 +46,16 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/chromium python3 -m unittest discover -s
 ```
 
 Do not install browsers or dependencies through uncontrolled egress.
+
+## Offline autonomous QA loop
+
+`tools/autonomous_qa.py` implements a first, constrained **discover → plan → execute → diagnose → propose → replay** loop. It discovers actual HTML controls, selects executable tests from *curated contracts*, executes seeded fault scenarios against a fresh local HTTP fixture, assigns deterministic failure classifications and proposed remedies, and replays each test against a separate clean fixture to measure false positives. JSON output includes a SHA-256 fixture fingerprint, observations, limitations and a mandatory `repair_verified=false` flag.
+
+```sh
+python3 -m unittest discover -s tests -p 'test_autonomous_qa.py' -v
+python3 tools/autonomous_qa.py --output qa-loop.json
+```
+
+This is **not** an LLM-discovered specification, not an automatic source repair, and not a verified post-patch rerun. Self-modifying source changes and external credentials are deliberately excluded. For genuine self-repair, a separately approved code agent must propose a narrow patch, independent Code QC must validate the exact modified SHA, and the same failing scenario must pass on the patched artifact (with the unpatched fault still detected). Do not call clean baseline replay a fix.
+
+Tests in this PR are committed but require an external runner to validate the exact GitHub SHA. No GitHub Actions.
