@@ -59,3 +59,16 @@ python3 tools/autonomous_qa.py --output qa-loop.json
 This is **not** an LLM-discovered specification, not an automatic source repair, and not a verified post-patch rerun. Self-modifying source changes and external credentials are deliberately excluded. For genuine self-repair, a separately approved code agent must propose a narrow patch, independent Code QC must validate the exact modified SHA, and the same failing scenario must pass on the patched artifact (with the unpatched fault still detected). Do not call clean baseline replay a fix.
 
 Tests in this PR are committed but require an external runner to validate the exact GitHub SHA. No GitHub Actions.
+
+## Verified source-repair recipe (new isolated source lab)
+
+`tools/source_repair_lab.py` is a narrowly-scoped demonstration of **actual source mutation and re-execution**, not the earlier clean-control replay. It injects a deliberate auth-bypass error into an *ephemeral copy* of the original synthetic Python HTTP handler, imports/runs the vulnerable source, observes the unauthorized admin access, creates a guarded source patch in the same ephemeral directory, imports/runs the patched module and verifies all six contracts on **fresh independent server instances**. Both before and after source SHA-256 values are recorded. The original repo source and production services remain unchanged.
+
+```sh
+python3 -m unittest discover -s tests -p 'test_source_repair_lab.py' -v
+python3 tools/source_repair_lab.py --output source-repair.json
+```
+
+The repair is approved only when the unpatched auth test fails, all six patched checks pass and no earlier passing check regresses. No external model or browser dependency is required. A mismatch in the exact source anchor fails closed. This is a fixed, known security repair recipe for the public synthetic fixture, **not autonomous general-purpose program repair**, not Code QC independent attestation, and not a TestSprite comparison.
+
+**Execution gate:** the source lab has been committed and GitHub fetch confirms its contents, but the exact PR commit has not been executed on an external test runner: git clone from this runtime fails DNS resolution. Keep this PR draft; do not treat implementation alone as verified operation.
